@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catur Online Multiplayer</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- jQuery (Dibutuhkan oleh chessboard.js) -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    
+    <!-- Chessboard.js CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    
+    <!-- Chess.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* Slate 900 */
+            color: #f8fafc; /* Slate 50 */
+        }
+        
+        .board-container {
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        /* Styling the clear-fix for floating elements inside chessboard */
+        .clearfix-7da63 {
+            clear: both;
+        }
+
+        /* Glassmorphism utilities */
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900">
+        <div class="flex flex-col items-center">
+            <div class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p class="text-lg font-medium text-slate-300">Menghubungkan ke Server...</p>
+        </div>
+    </div>
+
+    <!-- Custom Modal (Pengganti Alert) -->
+    <div id="custom-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div class="glass-panel p-6 rounded-xl w-full max-w-sm text-center transform transition-all shadow-2xl">
+            <h3 id="modal-title" class="text-xl font-bold mb-2 text-white">Informasi</h3>
+            <p id="modal-message" class="text-slate-300 mb-6">Pesan di sini.</p>
+            <button onclick="closeModal()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                Tutup
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="w-full max-w-lg">
+        
+        <!-- App Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 mb-2">
+                Catur Online
+            </h1>
+            <p class="text-slate-400">Main catur real-time bersama temanmu.</p>
+        </div>
+
+        <!-- Menu View -->
+        <div id="menu-view" class="hidden glass-panel p-6 rounded-2xl shadow-xl space-y-6">
+            <div class="text-center">
+                <button id="btn-create-room" class="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all transform hover:scale-[1.02]">
+                    ➕ Buat Ruangan Baru
+                </button>
+            </div>
+            
+            <div class="relative flex items-center py-2">
+                <div class="flex-grow border-t border-slate-600"></div>
+                <span class="flex-shrink-0 mx-4 text-slate-400 text-sm">ATAU GABUNG</span>
+                <div class="flex-grow border-t border-slate-600"></div>
+            </div>
+
+            <div class="space-y-3">
+                <input type="text" id="input-room-id" placeholder="Masukkan ID Ruangan" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase text-center font-mono tracking-widest">
+                <button id="btn-join-room" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all transform hover:scale-[1.02]">
+                    Masuk ke Ruangan
+                </button>
+            </div>
+        </div>
+
+        <!-- Game View -->
+        <div id="game-view" class="hidden flex flex-col items-center">
+            
+            <!-- Room Info Bar -->
+            <div class="w-full glass-panel flex justify-between items-center px-4 py-3 rounded-t-xl border-b-0">
+                <div class="flex flex-col">
+                    <span class="text-xs text-slate-400 uppercase font-bold tracking-wider">Ruangan</span>
+                    <div class="flex items-center gap-2">
+                        <span id="display-room-id" class="font-mono text-lg font-bold text-white uppercase bg-slate-800 px-2 rounded">---</span>
+                        <button id="btn-copy-room" class="text-blue-400 hover:text-blue-300 text-sm" title="Salin ID">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="flex flex-col items-end">
+                    <span class="text-xs text-slate-400 uppercase font-bold tracking-wider">Status</span>
+                    <span id="display-status" class="text-sm font-semibold text-emerald-400">Menunggu Lawan...</span>
+                </div>
+            </div>
+
+            <!-- Chessboard -->
+            <div class="board-container p-2 glass-panel rounded-none">
+                <div id="board" class="w-full h-full"></div>
+            </div>
+
+            <!-- Player Status Bar -->
+            <div class="w-full glass-panel flex justify-between items-center px-4 py-3 rounded-b-xl border-t-0 mb-6">
+                <div>
+                    <span class="text-xs text-slate-400">Anda Bermain Sebagai:</span><br>
+                    <span id="display-color" class="font-bold text-lg text-white">---</span>
+                </div>
+                <button id="btn-leave-room" class="text-red-400 hover:text-red-300 px-3 py-1 rounded bg-red-400/10 hover:bg-red-400/20 transition-colors text-sm font-medium">
+                    Keluar
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Konfigurasi Firebase milik Anda
+        const firebaseConfig = {
+            apiKey: "AIzaSyA6zYbJAwWClxO55InnYyKgmqT_AU7ZSGc",
+            authDomain: "catur-27a6f.firebaseapp.com",
+            projectId: "catur-27a6f",
+            storageBucket: "catur-27a6f.firebasestorage.app",
+            messagingSenderId: "1074194089380",
+            appId: "1:1074194089380:web:e0e06541e9bf587498ed31",
+            measurementId: "G-LBG1G9TYLS"
+        };
+
+        // Inisialisasi Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        
+        let userId = null;
+        let unsubscribeRoom = null;
+
+        // Variabel Status Game
+        let game = new Chess();
+        let board = null;
+        let myColor = 'w';
+        let currentRoomId = null;
+        let roomStatus = 'waiting'; 
+
+        // Elemen DOM
+        const elLoading = document.getElementById('loading-screen');
+        const elMenu = document.getElementById('menu-view');
+        const elGame = document.getElementById('game-view');
+        
+        // Fungsi Modal
+        window.showModal = (message, title = "Informasi") => {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-message').innerText = message;
+            document.getElementById('custom-modal').classList.remove('hidden');
+        };
+        window.closeModal = () => {
+            document.getElementById('custom-modal').classList.add('hidden');
+        };
+
+        // Buat ID Ruangan (6 karakter)
+        function generateRoomId() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let result = '';
+            for (let i = 0; i < 6; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        }
+
+        // Mulai Aplikasi & Login Anonim
+        async function initApp() {
+            try {
+                await signInAnonymously(auth);
+                userId = auth.currentUser.uid;
+                
+                elLoading.classList.add('hidden');
+                elMenu.classList.remove('hidden');
+            } catch (error) {
+                console.error("Auth error:", error);
+                showModal("Gagal terhubung ke server Firebase. Pastikan Autentikasi Anonim aktif.", "Error");
+                elLoading.innerHTML = `<p class="text-red-400">Koneksi Gagal</p>`;
+            }
+        }
+
+        // Inisialisasi Papan Catur
+        function initBoard(color) {
+            myColor = color;
+            game.reset(); 
+            
+            const config = {
+                draggable: true,
+                position: 'start',
+                orientation: color === 'w' ? 'white' : 'black',
+                onDragStart: onDragStart,
+                onDrop: onDrop,
+                onSnapEnd: onSnapEnd,
+                pieceTheme: 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/img/chesspieces/wikipedia/{piece}.png'
+            };
+            
+            if (board) {
+                board.destroy();
+            }
+            board = Chessboard('board', config);
+            
+            $(window).resize(() => {
+                if(board) board.resize();
+            });
+
+            document.getElementById('display-room-id').innerText = currentRoomId;
+            document.getElementById('display-color').innerText = color === 'w' ? 'Bidak Putih' : 'Bidak Hitam';
+            document.getElementById('display-color').className = color === 'w' ? 'font-bold text-lg text-slate-100' : 'font-bold text-lg text-slate-800 bg-slate-300 px-2 py-1 rounded';
+            
+            updateStatusText();
+        }
+
+        // Logika Catur
+        function onDragStart (source, piece, position, orientation) {
+            if (game.game_over() || roomStatus !== 'playing') return false;
+            if ((myColor === 'w' && piece.search(/^b/) !== -1) ||
+                (myColor === 'b' && piece.search(/^w/) !== -1)) return false;
+            if (game.turn() !== myColor) return false;
+        }
+
+        function onDrop (source, target) {
+            let move = game.move({
+                from: source,
+                to: target,
+                promotion: 'q' 
+            });
+
+            if (move === null) return 'snapback';
+            updateRoomState();
+        }
+
+        function onSnapEnd () {
+            board.position(game.fen());
+        }
+
+        function updateStatusText() {
+            const elStatus = document.getElementById('display-status');
+            
+            if (roomStatus === 'waiting') {
+                elStatus.innerText = 'Menunggu Lawan...';
+                elStatus.className = 'text-sm font-semibold text-yellow-400 animate-pulse';
+                return;
+            }
+
+            let statusHTML = '';
+            let moveColor = game.turn() === 'w' ? 'Putih' : 'Hitam';
+
+            if (game.in_checkmate()) {
+                statusHTML = `Selesai, ${moveColor === 'Putih' ? 'Hitam' : 'Putih'} Menang!`;
+                elStatus.className = 'text-sm font-semibold text-emerald-400';
+            } else if (game.in_draw()) {
+                statusHTML = 'Selesai (Seri)';
+                elStatus.className = 'text-sm font-semibold text-slate-400';
+            } else {
+                statusHTML = `Giliran: ${moveColor}`;
+                if (game.in_check()) {
+                    statusHTML += ' (SKAK!)';
+                    elStatus.className = 'text-sm font-semibold text-red-400';
+                } else {
+                    elStatus.className = game.turn() === myColor ? 'text-sm font-semibold text-blue-400' : 'text-sm font-semibold text-slate-400';
+                }
+            }
+            elStatus.innerText = statusHTML;
+        }
+
+        // Sinkronisasi Firebase
+        async function createRoom() {
+            try {
+                const newRoomId = generateRoomId();
+                const roomRef = doc(db, 'rooms', newRoomId);
+                
+                await setDoc(roomRef, {
+                    white: userId,
+                    black: null,
+                    fen: 'start',
+                    status: 'waiting',
+                    lastUpdated: Date.now()
+                });
+
+                currentRoomId = newRoomId;
+                roomStatus = 'waiting';
+                
+                showGameView();
+                initBoard('w');
+                listenToRoom(newRoomId);
+                
+            } catch (error) {
+                console.error("Error creating room:", error);
+                showModal("Gagal membuat ruangan. Pastikan Firestore dalam mode Test.");
+            }
+        }
+
+        async function joinRoom(roomIdInput) {
+            roomIdInput = roomIdInput.trim().toUpperCase();
+            if (!roomIdInput) {
+                showModal("Masukkan ID Ruangan!");
+                return;
+            }
+
+            try {
+                const roomRef = doc(db, 'rooms', roomIdInput);
+                const roomSnap = await getDoc(roomRef);
+
+                if (!roomSnap.exists()) {
+                    showModal("Ruangan tidak ditemukan!");
+                    return;
+                }
+
+                const data = roomSnap.data();
+                
+                if (data.white === userId) {
+                    currentRoomId = roomIdInput;
+                    roomStatus = data.status;
+                    showGameView();
+                    initBoard('w');
+                    game.load(data.fen !== 'start' ? data.fen : 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+                    board.position(game.fen());
+                    listenToRoom(roomIdInput);
+                } else if (!data.black || data.black === userId) {
+                    await updateDoc(roomRef, {
+                        black: userId,
+                        status: 'playing',
+                        lastUpdated: Date.now()
+                    });
+
+                    currentRoomId = roomIdInput;
+                    roomStatus = 'playing';
+                    showGameView();
+                    initBoard('b');
+                    
+                    if (data.fen !== 'start') {
+                        game.load(data.fen);
+                        board.position(game.fen());
+                    }
+                    listenToRoom(roomIdInput);
+                } else {
+                    showModal("Ruangan sudah penuh!");
+                }
+            } catch (error) {
+                console.error("Error joining room:", error);
+                showModal("Gagal bergabung. Pastikan Firestore dalam mode Test.");
+            }
+        }
+
+        function listenToRoom(roomId) {
+            const roomRef = doc(db, 'rooms', roomId);
+            if (unsubscribeRoom) unsubscribeRoom();
+
+            unsubscribeRoom = onSnapshot(roomRef, (docSnap) => {
+                if (!docSnap.exists()) {
+                    leaveRoom(false);
+                    showModal("Ruangan telah ditutup.");
+                    return;
+                }
+
+                const data = docSnap.data();
+                if (data.status !== roomStatus) {
+                    roomStatus = data.status;
+                    updateStatusText();
+                }
+
+                if (data.fen !== 'start' && data.fen !== game.fen()) {
+                    game.load(data.fen);
+                    board.position(data.fen);
+                    updateStatusText();
+                }
+            });
+        }
+
+        async function updateRoomState() {
+            if (!currentRoomId) return;
+            try {
+                const roomRef = doc(db, 'rooms', currentRoomId);
+                await updateDoc(roomRef, {
+                    fen: game.fen(),
+                    lastUpdated: Date.now()
+                });
+                updateStatusText();
+            } catch (error) {
+                console.error("Error updating move:", error);
+            }
+        }
+
+        function leaveRoom(manual = true) {
+            if (unsubscribeRoom) {
+                unsubscribeRoom();
+                unsubscribeRoom = null;
+            }
+            currentRoomId = null;
+            elGame.classList.add('hidden');
+            elMenu.classList.remove('hidden');
+            document.getElementById('input-room-id').value = '';
+        }
+
+        function showGameView() {
+            elMenu.classList.add('hidden');
+            elGame.classList.remove('hidden');
+            setTimeout(() => { if (board) board.resize(); }, 100);
+        }
+
+        // Event Listeners
+        document.getElementById('btn-create-room').addEventListener('click', createRoom);
+        document.getElementById('btn-join-room').addEventListener('click', () => {
+            joinRoom(document.getElementById('input-room-id').value);
+        });
+        document.getElementById('input-room-id').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') joinRoom(e.target.value);
+        });
+        document.getElementById('btn-leave-room').addEventListener('click', () => leaveRoom(true));
+        
+        document.getElementById('btn-copy-room').addEventListener('click', () => {
+            if (currentRoomId) {
+                try {
+                    navigator.clipboard.writeText(currentRoomId);
+                    showModal(`ID ${currentRoomId} berhasil disalin!`);
+                } catch(err) {
+                    const temp = document.createElement("input");
+                    temp.value = currentRoomId;
+                    document.body.appendChild(temp);
+                    temp.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(temp);
+                    showModal(`ID ${currentRoomId} berhasil disalin!`);
+                }
+            }
+        });
+
+        window.onload = () => initApp();
+    </script>
+</body>
+</html>
